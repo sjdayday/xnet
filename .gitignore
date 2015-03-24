@@ -3,4 +3,4 @@ target
 .settings
 .classpath
 
-results.csv
+report.csv
