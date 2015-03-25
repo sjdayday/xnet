@@ -121,16 +121,16 @@ public class GraspExampleTest implements PropertyChangeListener {
 		includes = new IncludeHierarchy(basicControl, "Grasp"); 
 		includes.include(closeHand, "Close_hand");
 //		build a "merge arc" by hand the first time...
-    	includes.getInclude("Close_hand").addToInterface(closeHand.getComponent("Enabled", Place.class), true, false, false, false);    
-    	includes.addAvailablePlaceToPetriNet(includes.getInterfacePlace("Close_hand.Enabled"));
-    	Place graspCloseHandEnabled = includes.getInterfacePlace("Close_hand.Enabled"); 
-    	Transition start = basicControl.getComponent("Start",Transition.class);
+		includes.getInclude("Close_hand").addToInterface(closeHand.getComponent("Enabled", Place.class), true, false, false, false);    
+		includes.addAvailablePlaceToPetriNet(includes.getInterfacePlace("Close_hand.Enabled"));
+		Place graspCloseHandEnabled = includes.getInterfacePlace("Close_hand.Enabled"); 
+		Transition start = basicControl.getComponent("Start",Transition.class);
 		OutboundArc arcOut = new OutboundNormalArc(start, graspCloseHandEnabled, tokenweights);
-    	basicControl.add(arcOut); 
+		basicControl.add(arcOut); 
 //    	...equivalent to this:
 //		buildMergeArc(false, includes, "Close_hand", "Enabled", "Start", "Close_hand.Enabled"); 
     	
-    	buildMergeArc(true, includes, "Close_hand", "Done", "Finish", "Close_hand.Done"); 
+		buildMergeArc(true, includes, "Close_hand", "Done", "Finish", "Close_hand.Done"); 
     	
 		runner = new PetriNetRunner(includes.getPetriNet()); 
 		runner.markPlace("Grasp.Enabled", "Default", 1);
@@ -358,7 +358,7 @@ public class GraspExampleTest implements PropertyChangeListener {
 	}
 
 	private void buildPrePostTransitions(IncludeHierarchy includes,
-			String transition) throws PetriNetComponentException {
+		String transition) throws PetriNetComponentException {
 		if (!prepareTransitionExpanded) {
 			t10 = new DiscreteTransition("T10");  
 			t11 = new DiscreteTransition("T11"); 
@@ -371,7 +371,7 @@ public class GraspExampleTest implements PropertyChangeListener {
 	}
 
 	private void findComponentsAffectedByExpansion(IncludeHierarchy includes,
-			String transition) throws PetriNetComponentNotFoundException {
+		String transition) throws PetriNetComponentNotFoundException {
 		targetTransition = includes.getPetriNet().getComponent(transition, Transition.class); 
 		beforePlace = includes.getPetriNet().inboundArcs(targetTransition).iterator().next().getSource();
 		afterPlace = includes.getPetriNet().outboundArcs(targetTransition).iterator().next().getTarget();
@@ -379,8 +379,8 @@ public class GraspExampleTest implements PropertyChangeListener {
 
 	@SuppressWarnings("rawtypes")
 	private void buildMergeArc(boolean inbound,
-			IncludeHierarchy parent, String child, String homePlace, String transition, String awayPlace) 
-					throws IncludeException, PetriNetComponentNotFoundException, PetriNetComponentException {
+		IncludeHierarchy parent, String child, String homePlace, String transition, String awayPlace) 
+				throws IncludeException, PetriNetComponentNotFoundException, PetriNetComponentException {
 		parent.getInclude(child).addToInterface(parent.getInclude(child).getPetriNet().
 				getComponent(homePlace, Place.class), true, false, false, false);    
 		parent.addAvailablePlaceToPetriNet(parent.getInterfacePlace(awayPlace));
@@ -425,14 +425,14 @@ public class GraspExampleTest implements PropertyChangeListener {
 
     private PetriNet buildBasicNet(String name) {
     	PetriNet net = APetriNet.named(name).and(AToken.called("Default").withColor(Color.BLACK)).
-    					and(APlace.withId("P0").externallyAccessible()).and(APlace.withId("P1")).and(APlace.withId("P2")).and(APlace.withId("P3")).
-    			    	and(AnImmediateTransition.withId("T0")).and(AnImmediateTransition.withId("T1")).and(AnImmediateTransition.withId("T2")).		
-    					and(ANormalArc.withSource("P0").andTarget("T0").with("1", "Default").token()).
-    					and(ANormalArc.withSource("T0").andTarget("P1").with("1", "Default").token()).
-    					and(ANormalArc.withSource("P1").andTarget("T1").with("1", "Default").token()).
-    					and(ANormalArc.withSource("T1").andTarget("P2").with("1", "Default").token()).
-    					and(ANormalArc.withSource("P2").andTarget("T2").with("1", "Default").token()).
-    					andFinally(ANormalArc.withSource("T2").andTarget("P3").with("1", "Default").token());
+    		and(APlace.withId("P0").externallyAccessible()).and(APlace.withId("P1")).and(APlace.withId("P2")).and(APlace.withId("P3")).
+    		and(AnImmediateTransition.withId("T0")).and(AnImmediateTransition.withId("T1")).and(AnImmediateTransition.withId("T2")).		
+    		and(ANormalArc.withSource("P0").andTarget("T0").with("1", "Default").token()).
+    		and(ANormalArc.withSource("T0").andTarget("P1").with("1", "Default").token()).
+    		and(ANormalArc.withSource("P1").andTarget("T1").with("1", "Default").token()).
+    		and(ANormalArc.withSource("T1").andTarget("P2").with("1", "Default").token()).
+    		and(ANormalArc.withSource("P2").andTarget("T2").with("1", "Default").token()).
+    		andFinally(ANormalArc.withSource("T2").andTarget("P3").with("1", "Default").token());
     	name(net, Place.class, "P0", "Enabled"); 
     	name(net, Place.class, "P1", "Ready"); 
     	name(net, Place.class, "P2", "Ongoing"); 
@@ -446,21 +446,21 @@ public class GraspExampleTest implements PropertyChangeListener {
     private PetriNet buildCloseHand() {
     	// P0 / Enabled is externally accessible for testing, not because required for Grasp xschema
     	PetriNet net = APetriNet.named("Close_hand").and(AToken.called("Default").withColor(Color.BLACK)).
-    			and(APlace.withId("P0").externallyAccessible()).and(APlace.withId("P1")).and(APlace.withId("P2")).and(APlace.withId("P3")).
-    			and(APlace.withId("P4")).and(APlace.withId("P5")).and(APlace.withId("P6").externallyAccessible()).
-    			and(AnImmediateTransition.withId("T0")).and(AnImmediateTransition.withId("T1")).and(AnImmediateTransition.withId("T2")).		
-				and(AnExternalTransition.withId("T3").andExternalClass("edu.berkeley.icsi.xschema.TestingCloseExternalTransition")).
-    			and(ANormalArc.withSource("P0").andTarget("T0").with("1", "Default").token()).
-    			and(ANormalArc.withSource("T0").andTarget("P1").with("1", "Default").token()).
-    			and(ANormalArc.withSource("P1").andTarget("T1").with("1", "Default").token()).
-    			and(ANormalArc.withSource("T1").andTarget("P2").with("1", "Default").token()).
-    			and(ANormalArc.withSource("P2").andTarget("T2").with("1", "Default").token()).
-    			and(ANormalArc.withSource("T2").andTarget("P3").with("1", "Default").token()).
-    			and(ANormalArc.withSource("T1").andTarget("P4").with("1", "Default").token()).
-    			and(ANormalArc.withSource("P4").andTarget("T3").with("1", "Default").token()).
-    			and(ANormalArc.withSource("T3").andTarget("P5").with("1", "Default").token()).
-    			and(ANormalArc.withSource("P5").andTarget("T2").with("1", "Default").token()).
-    			andFinally(ANormalArc.withSource("P6").andTarget("T2").with("1", "Default").token());
+    		and(APlace.withId("P0").externallyAccessible()).and(APlace.withId("P1")).and(APlace.withId("P2")).and(APlace.withId("P3")).
+    		and(APlace.withId("P4")).and(APlace.withId("P5")).and(APlace.withId("P6").externallyAccessible()).
+    		and(AnImmediateTransition.withId("T0")).and(AnImmediateTransition.withId("T1")).and(AnImmediateTransition.withId("T2")).		
+    		and(AnExternalTransition.withId("T3").andExternalClass("edu.berkeley.icsi.xschema.TestingCloseExternalTransition")).
+    		and(ANormalArc.withSource("P0").andTarget("T0").with("1", "Default").token()).
+    		and(ANormalArc.withSource("T0").andTarget("P1").with("1", "Default").token()).
+    		and(ANormalArc.withSource("P1").andTarget("T1").with("1", "Default").token()).
+    		and(ANormalArc.withSource("T1").andTarget("P2").with("1", "Default").token()).
+    		and(ANormalArc.withSource("P2").andTarget("T2").with("1", "Default").token()).
+    		and(ANormalArc.withSource("T2").andTarget("P3").with("1", "Default").token()).
+    		and(ANormalArc.withSource("T1").andTarget("P4").with("1", "Default").token()).
+    		and(ANormalArc.withSource("P4").andTarget("T3").with("1", "Default").token()).
+    		and(ANormalArc.withSource("T3").andTarget("P5").with("1", "Default").token()).
+    		and(ANormalArc.withSource("P5").andTarget("T2").with("1", "Default").token()).
+    		andFinally(ANormalArc.withSource("P6").andTarget("T2").with("1", "Default").token());
     	name(net, Place.class, "P0", "Enabled"); 
     	name(net, Place.class, "P1", "Ready"); 
     	name(net, Place.class, "P2", "Ongoing"); 
@@ -503,7 +503,7 @@ public class GraspExampleTest implements PropertyChangeListener {
 	}
 	private void cleanupFile(String filename) {
 		file = new File(filename); 
-        if (file.exists()) file.delete();
+		if (file.exists()) file.delete();
 	}
 
 	@SuppressWarnings("unchecked")
