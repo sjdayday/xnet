@@ -33,6 +33,7 @@ import uk.ac.imperial.pipe.exceptions.IncludeException;
 import uk.ac.imperial.pipe.exceptions.PetriNetComponentException;
 import uk.ac.imperial.pipe.exceptions.PetriNetComponentNotFoundException;
 import uk.ac.imperial.pipe.models.petrinet.Arc;
+import uk.ac.imperial.pipe.models.petrinet.DiscreteExternalTransition;
 import uk.ac.imperial.pipe.models.petrinet.DiscretePlace;
 import uk.ac.imperial.pipe.models.petrinet.DiscreteTransition;
 import uk.ac.imperial.pipe.models.petrinet.InboundArc;
@@ -46,6 +47,7 @@ import uk.ac.imperial.pipe.models.petrinet.PlaceStatusInterface;
 import uk.ac.imperial.pipe.models.petrinet.Transition;
 import uk.ac.imperial.pipe.runner.FiringWriter;
 import uk.ac.imperial.pipe.runner.InterfaceException;
+import uk.ac.imperial.pipe.runner.JsonParameters;
 import uk.ac.imperial.pipe.runner.PetriNetRunner;
 import uk.ac.imperial.pipe.runner.Runner;
 import uk.ac.imperial.pipe.runner.StateReport;
@@ -75,8 +77,8 @@ public class GraspExampleTest implements PropertyChangeListener {
 	private Transition targetTransition;
 	private Place beforePlace;
 	private Place afterPlace;
-	private Transition T10;
-	private Transition T11;
+	private Transition t10;
+	private Transition t11;
 	private boolean closeSensed;
 
     @Before
@@ -210,14 +212,94 @@ public class GraspExampleTest implements PropertyChangeListener {
 		run(); 
 		assertTrue(tokenEvent); 
 //		printResults();
-		checkLine("", 0, "\"Round\",\"Transition\",\"Grasp.Close_hand.Close_sensed\",\"Grasp.Close_hand.Closing\",\"Grasp.Close_hand.Done\",\"Grasp.Close_hand.Enabled\",\"Grasp.Close_hand.Missed\",\"Grasp.Close_hand.Ongoing\",\"Grasp.Close_hand.P4\",\"Grasp.Close_hand.Ready\",\"Grasp.Close_hand.Suspended\",\"Grasp.Done\",\"Grasp.Enabled\",\"Grasp.Ongoing\",\"Grasp.Ready\",\"Grasp.Suspended\"");
+		checkLine("", 0, "\"Round\",\"Transition\",\"Grasp.Close_hand.Close_sensed\",\"Grasp.Close_hand.Closing\","
+				+ "\"Grasp.Close_hand.Done\",\"Grasp.Close_hand.Enabled\",\"Grasp.Close_hand.Missed\","
+				+ "\"Grasp.Close_hand.Ongoing\",\"Grasp.Close_hand.P4\",\"Grasp.Close_hand.Ready\","
+				+ "\"Grasp.Close_hand.Suspended\",\"Grasp.Done\",\"Grasp.Enabled\",\"Grasp.Ongoing\","
+				+ "\"Grasp.Ready\",\"Grasp.Suspended\"");
 		checkLine("", 2, "1,\"Grasp.Prepare\",0,0,0,0,0,0,0,0,0,0,0,0,1,0");
 		checkLine("", 3, "2,\"Grasp.Start\",0,0,0,1,0,0,0,0,0,0,0,1,0,0");
 		checkLine("", 4, "3,\"Grasp.Close_hand.Prepare\",0,0,0,0,0,0,0,1,0,0,0,1,0,0");
 		checkLine("", 5, "4,\"Grasp.Close_hand.Start\",0,0,0,0,0,1,1,0,0,0,0,1,0,0");
 		checkLine("", 6, "5,\"Grasp.Close_hand.Close\",0,1,0,0,0,1,0,0,0,0,0,1,0,0");
-		checkLine("", 7, "6,\"Grasp.Close_hand.Suspend\",0,1,0,0,0,0,0,0,1,0,0,1,0,0");
+		checkLine("still Closing -- a realistic xschema would clear this",
+				7, "6,\"Grasp.Close_hand.Suspend\",0,1,0,0,0,0,0,0,1,0,0,1,0,0");
 		checkLine("", 8, "7,\"Grasp.Suspend\",0,1,0,0,0,0,0,0,0,0,0,0,0,1");
+	}
+	@Test
+	public void completeGraspXschema() throws Exception {
+		PetriNet basicControl = buildBasicNet("net1"); 
+		
+		includes = new IncludeHierarchy(basicControl, "Grasp");
+		findComponentsAffectedByExpansion(includes, "Prepare");
+		expandTransition(includes, "Prepare", "Pre-shape");
+		expandTransition(includes, "Prepare", "Approach");
+		removeTransition(includes, "Prepare"); 
+		addExternalTransitionToApproach(includes); 
+		JsonParameters parameters = new JsonParameters("{\"transitions\":{\"Grasp.Approach.T3\":{\"num\":1}}}"); 
+		parameters.setActiveTransition("Grasp.Approach.T3");
+
+		PetriNet closeHand = buildCloseHand(); 
+		includes.include(closeHand, "Close_hand");
+		buildMergeArc(false, includes, "Close_hand", "Enabled", "Start", "Close_hand.Enabled"); 
+		buildMergeArc(true, includes, "Close_hand", "Done", "Finish", "Close_hand.Done"); 
+		
+		addSuspend(closeHand); 
+		Place missed = addMissedExternalInputPlaceToCloseHandXschema(closeHand); 
+		Transition transition = closeHand.getComponent("Suspend", Transition.class);
+		InboundArc inbound = new InboundNormalArc(missed, transition, tokenweights);
+		closeHand.add(inbound);
+		closeSensed = false; 
+		
+		addSuspend(basicControl); 
+		addExternalOutputStatusToGraspSuspendedPlace(basicControl);
+		
+		buildMergeArc(true, includes, "Close_hand", "Suspended", "Suspend", "Close_hand.Suspended"); 
+		
+		runner = new PetriNetRunner(includes.getPetriNet()); 
+		runner.markPlace("Grasp.Enabled", "Default", 1);
+		CLOSE_SENSED = "Grasp.Close_hand.Close_sensed"; 
+		runner.setTransitionContext("Grasp.Approach.T3", parameters);
+		runner.setTransitionContext("Grasp.Close_hand.Close", this);
+		runner.listenForTokenChanges(this, "Grasp.Suspended");
+		run(); 
+		assertTrue(tokenEvent); 
+		assertEquals(2, parameters.getActiveTransition().getJsonObject().getInt("num")); 
+//		printResults();
+		checkLine("", 0, "\"Round\",\"Transition\",\"Grasp.Approach.Done\",\"Grasp.Approach.Enabled\","
+				+ "\"Grasp.Approach.Ongoing\",\"Grasp.Approach.P4\",\"Grasp.Approach.Ready\","
+				+ "\"Grasp.Close_hand.Close_sensed\",\"Grasp.Close_hand.Closing\",\"Grasp.Close_hand.Done\","
+				+ "\"Grasp.Close_hand.Enabled\",\"Grasp.Close_hand.Missed\",\"Grasp.Close_hand.Ongoing\","
+				+ "\"Grasp.Close_hand.P4\",\"Grasp.Close_hand.Ready\",\"Grasp.Close_hand.Suspended\","
+				+ "\"Grasp.Done\",\"Grasp.Enabled\",\"Grasp.Ongoing\",\"Grasp.Pre-shape.Done\","
+				+ "\"Grasp.Pre-shape.Enabled\",\"Grasp.Pre-shape.Ongoing\",\"Grasp.Pre-shape.Ready\","
+				+ "\"Grasp.Ready\",\"Grasp.Suspended\"");
+		checkLine("", 2, "1,\"Grasp.Pre-Prepare\",0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0");
+		checkLine("", 3, "2,\"Grasp.Approach.Prepare\",0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0");
+		checkLine("", 4, "3,\"Grasp.Pre-shape.Prepare\",0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0");
+		checkLine("", 5, "4,\"Grasp.Approach.Start\",0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0");
+		checkLine("", 6, "5,\"Grasp.Pre-shape.Start\",0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0");
+		checkLine("", 7, "6,\"Grasp.Pre-shape.Finish\",0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0");
+		checkLine("", 8, "7,\"Grasp.Approach.T3\",0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0");
+		checkLine("", 9, "8,\"Grasp.Approach.Finish\",1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0");
+		checkLine("", 10, "9,\"Grasp.Post-Prepare\",0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0");
+		checkLine("", 11, "10,\"Grasp.Start\",0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0");
+		checkLine("", 12, "11,\"Grasp.Close_hand.Prepare\",0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0");
+		checkLine("", 13, "12,\"Grasp.Close_hand.Start\",0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,1,0,0,0,0,0,0");
+		checkLine("", 14, "13,\"Grasp.Close_hand.Close\",0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0");
+		checkLine("", 15, "14,\"Grasp.Close_hand.Suspend\",0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0");
+		checkLine("", 16, "15,\"Grasp.Suspend\",0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1");
+	}
+
+	private void addExternalTransitionToApproach(IncludeHierarchy includes) throws Exception {
+		PetriNet approach = includes.getInclude("Approach").getPetriNet(); 
+		Place p4 = new DiscretePlace("P4");
+		approach.add(p4);
+		Transition t3 = new DiscreteExternalTransition("T3", "T3","edu.berkeley.icsi.xschema.TestingApproachExternalTransition"); 
+		approach.add(t3);
+		approach.add(new OutboundNormalArc(approach.getComponent("Start", Transition.class), p4, tokenweights));    
+		approach.add(new InboundNormalArc(p4, t3, tokenweights));    
+		
 	}
 
 	private void addExternalOutputStatusToGraspSuspendedPlace(
@@ -273,19 +355,19 @@ public class GraspExampleTest implements PropertyChangeListener {
 		PetriNet expanded = buildBasicNet(child+"net"); 
 		includes.include(expanded, child);
 		buildPrePostTransitions(includes, transition);
-		includes.getPetriNet().add(new InboundNormalArc(beforePlace, T10, tokenweights));    
+		includes.getPetriNet().add(new InboundNormalArc(beforePlace, t10, tokenweights));    
 		buildMergeArc(false, includes, child, "Enabled", "Pre-"+transition, child+".Enabled"); 
-		includes.getPetriNet().add(new OutboundNormalArc(T11, afterPlace, tokenweights));    
+		includes.getPetriNet().add(new OutboundNormalArc(t11, afterPlace, tokenweights));    
 		buildMergeArc(true, includes, child, "Done", "Post-"+transition, child+".Done"); 
 	}
 
 	private void buildPrePostTransitions(IncludeHierarchy includes,
 			String transition) throws PetriNetComponentException {
 		if (!prepareTransitionExpanded) {
-			T10 = new DiscreteTransition("T10");  
-			T11 = new DiscreteTransition("T11"); 
-			includes.getPetriNet().add(T10);
-			includes.getPetriNet().add(T11);
+			t10 = new DiscreteTransition("T10");  
+			t11 = new DiscreteTransition("T11"); 
+			includes.getPetriNet().add(t10);
+			includes.getPetriNet().add(t11);
 			name(includes.getPetriNet(), Transition.class, "T10", "Pre-"+transition); 
 			name(includes.getPetriNet(), Transition.class, "T11", "Post-"+transition); 
 			prepareTransitionExpanded = true; 
@@ -402,7 +484,7 @@ public class GraspExampleTest implements PropertyChangeListener {
 
 	@SuppressWarnings("unchecked")
 	private void name(PetriNet net, @SuppressWarnings("rawtypes") Class clazz, String component, String name) {
-		// name components manually, until support added to DSL in PIPECore
+		// rename components manually, until support added to DSL in PIPECore
 		// works after a fashion, but arcs are inconsistently named
 		try {
 			net.getComponent(component, clazz).setId(name);
