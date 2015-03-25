@@ -77,14 +77,14 @@ public class GraspExampleTest implements PropertyChangeListener {
 	private Transition t11;
 	private boolean closeSensed;
 
-    @Before
-    public void setUp() {
-        cleanupFile(filename); 
-        buildTokenWeights(); 
-        prepareTransitionExpanded = false; 
-        closeSensed = true;
-        tokenEvent = false; 
-    }
+	@Before
+	public void setUp() {
+		cleanupFile(filename); 
+		buildTokenWeights(); 
+		prepareTransitionExpanded = false; 
+		closeSensed = true;
+		tokenEvent = false; 
+	}
 
 	@Test
 	public void basicXschemaBuilt() throws Exception {
@@ -127,7 +127,7 @@ public class GraspExampleTest implements PropertyChangeListener {
 		Transition start = basicControl.getComponent("Start",Transition.class);
 		OutboundArc arcOut = new OutboundNormalArc(start, graspCloseHandEnabled, tokenweights);
 		basicControl.add(arcOut); 
-//    	...equivalent to this:
+//		...equivalent to this:
 //		buildMergeArc(false, includes, "Close_hand", "Enabled", "Start", "Close_hand.Enabled"); 
     	
 		buildMergeArc(true, includes, "Close_hand", "Done", "Finish", "Close_hand.Done"); 
@@ -298,8 +298,7 @@ public class GraspExampleTest implements PropertyChangeListener {
 		
 	}
 
-	private void addExternalOutputStatusToGraspSuspendedPlace(
-			PetriNet basicControl) throws PetriNetComponentNotFoundException {
+	private void addExternalOutputStatusToGraspSuspendedPlace(PetriNet basicControl) throws Exception {
 		Place suspended = basicControl.getComponent("Suspended", Place.class); 
 		PlaceStatusInterface status = new PlaceStatusInterface(suspended, includes);  
 		status.setExternal(true);
