@@ -3,6 +3,8 @@ package edu.berkeley.icsi.xschema;
 import static org.junit.Assert.*;
 
 import java.awt.Color;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -16,6 +18,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -30,6 +33,7 @@ import uk.ac.imperial.pipe.exceptions.IncludeException;
 import uk.ac.imperial.pipe.exceptions.PetriNetComponentException;
 import uk.ac.imperial.pipe.exceptions.PetriNetComponentNotFoundException;
 import uk.ac.imperial.pipe.models.petrinet.Arc;
+import uk.ac.imperial.pipe.models.petrinet.DiscretePlace;
 import uk.ac.imperial.pipe.models.petrinet.DiscreteTransition;
 import uk.ac.imperial.pipe.models.petrinet.InboundArc;
 import uk.ac.imperial.pipe.models.petrinet.InboundNormalArc;
@@ -38,6 +42,7 @@ import uk.ac.imperial.pipe.models.petrinet.OutboundArc;
 import uk.ac.imperial.pipe.models.petrinet.OutboundNormalArc;
 import uk.ac.imperial.pipe.models.petrinet.PetriNet;
 import uk.ac.imperial.pipe.models.petrinet.Place;
+import uk.ac.imperial.pipe.models.petrinet.PlaceStatusInterface;
 import uk.ac.imperial.pipe.models.petrinet.Transition;
 import uk.ac.imperial.pipe.runner.FiringWriter;
 import uk.ac.imperial.pipe.runner.InterfaceException;
@@ -56,22 +61,12 @@ import uk.ac.imperial.pipe.runner.StateReport;
  * @author stevedoubleday
  *
  */
-public class GraspExampleTest {
+public class GraspExampleTest implements PropertyChangeListener {
 
     private static  String CLOSE_SENSED = null;
-	private PetriNet net;
 	private Runner runner;
-	private int events;
-	private StateReport report;
-	private int checkCase;
-	private ByteArrayOutputStream out;
-	private PrintStream print;
-	private BufferedReader reader;
 	private File file;
-	private int tokenFired;
 	private boolean tokenEvent;
-	private String targetPlaceId;
-	private String includePath;
 	String filename = "report.csv";
 	private List<String> linelist;
 	private IncludeHierarchy includes;
@@ -82,12 +77,15 @@ public class GraspExampleTest {
 	private Place afterPlace;
 	private Transition T10;
 	private Transition T11;
+	private boolean closeSensed;
 
     @Before
     public void setUp() {
         cleanupFile(filename); 
         buildTokenWeights(); 
         prepareTransitionExpanded = false; 
+        closeSensed = true;
+        tokenEvent = false; 
     }
 
 	@Test
@@ -183,6 +181,80 @@ public class GraspExampleTest {
 		checkLine("", 10, "9,\"Grasp.Start\",0,0,0,0,0,0,1,0,0,0,0,0");
 		checkLine("", 11, "10,\"Grasp.Finish\",0,0,0,0,1,0,0,0,0,0,0,0");
 	}
+	@Test
+	public void closeHandXschemaBuiltWithSuspendSemantics() throws Exception {
+		PetriNet basicControl = buildBasicNet("net1"); 
+		PetriNet closeHand = buildCloseHand(); 
+		includes = new IncludeHierarchy(basicControl, "Grasp"); 
+		includes.include(closeHand, "Close_hand");
+		buildMergeArc(false, includes, "Close_hand", "Enabled", "Start", "Close_hand.Enabled"); 
+		buildMergeArc(true, includes, "Close_hand", "Done", "Finish", "Close_hand.Done"); 
+
+		addSuspend(closeHand); 
+		Place missed = addMissedExternalInputPlaceToCloseHandXschema(closeHand); 
+		Transition transition = closeHand.getComponent("Suspend", Transition.class);
+		InboundArc inbound = new InboundNormalArc(missed, transition, tokenweights);
+		closeHand.add(inbound);
+		closeSensed = false; 
+
+		addSuspend(basicControl); 
+		addExternalOutputStatusToGraspSuspendedPlace(basicControl);
+
+		buildMergeArc(true, includes, "Close_hand", "Suspended", "Suspend", "Close_hand.Suspended"); 
+    	
+		runner = new PetriNetRunner(includes.getPetriNet()); 
+		runner.markPlace("Grasp.Enabled", "Default", 1);
+		CLOSE_SENSED = "Grasp.Close_hand.Close_sensed"; 
+		runner.setTransitionContext("Grasp.Close_hand.Close", this);
+		runner.listenForTokenChanges(this, "Grasp.Suspended");
+		run(); 
+		assertTrue(tokenEvent); 
+//		printResults();
+		checkLine("", 0, "\"Round\",\"Transition\",\"Grasp.Close_hand.Close_sensed\",\"Grasp.Close_hand.Closing\",\"Grasp.Close_hand.Done\",\"Grasp.Close_hand.Enabled\",\"Grasp.Close_hand.Missed\",\"Grasp.Close_hand.Ongoing\",\"Grasp.Close_hand.P4\",\"Grasp.Close_hand.Ready\",\"Grasp.Close_hand.Suspended\",\"Grasp.Done\",\"Grasp.Enabled\",\"Grasp.Ongoing\",\"Grasp.Ready\",\"Grasp.Suspended\"");
+		checkLine("", 2, "1,\"Grasp.Prepare\",0,0,0,0,0,0,0,0,0,0,0,0,1,0");
+		checkLine("", 3, "2,\"Grasp.Start\",0,0,0,1,0,0,0,0,0,0,0,1,0,0");
+		checkLine("", 4, "3,\"Grasp.Close_hand.Prepare\",0,0,0,0,0,0,0,1,0,0,0,1,0,0");
+		checkLine("", 5, "4,\"Grasp.Close_hand.Start\",0,0,0,0,0,1,1,0,0,0,0,1,0,0");
+		checkLine("", 6, "5,\"Grasp.Close_hand.Close\",0,1,0,0,0,1,0,0,0,0,0,1,0,0");
+		checkLine("", 7, "6,\"Grasp.Close_hand.Suspend\",0,1,0,0,0,0,0,0,1,0,0,1,0,0");
+		checkLine("", 8, "7,\"Grasp.Suspend\",0,1,0,0,0,0,0,0,0,0,0,0,0,1");
+	}
+
+	private void addExternalOutputStatusToGraspSuspendedPlace(
+			PetriNet basicControl) throws PetriNetComponentNotFoundException {
+		Place suspended = basicControl.getComponent("Suspended", Place.class); 
+		PlaceStatusInterface status = new PlaceStatusInterface(suspended, includes);  
+		status.setExternal(true);
+		status.setOutputOnlyArcConstraint(true);
+		status.update(); 
+		suspended.setStatus(status);
+	}
+
+	private Place addMissedExternalInputPlaceToCloseHandXschema(PetriNet closeHand) throws Exception {
+		Place missed = new DiscretePlace("P000");
+		PlaceStatusInterface status = new PlaceStatusInterface(missed, includes.getInclude("Close_hand"));  
+		status.setExternal(true);
+		status.setInputOnlyArcConstraint(true);
+		status.update(); 
+		missed.setStatus(status);
+		closeHand.add(missed);
+		name(closeHand, Place.class, "P000", "Missed");
+		return missed; 
+	}
+
+	private void addSuspend(PetriNet net) throws  Exception {
+		Place suspended = new DiscretePlace("P00");
+		Transition suspend = new DiscreteTransition("T00"); 
+		Place ongoing = net.getComponent("Ongoing", Place.class);
+		net.add(suspended);
+		net.add(suspend);
+		name(net, Place.class, "P00", "Suspended"); 
+		name(net, Transition.class, "T00", "Suspend"); 
+		InboundArc arcIn = new InboundNormalArc(ongoing, suspend, tokenweights); 
+		OutboundArc arcOut = new OutboundNormalArc(suspend, suspended, tokenweights);
+		net.add(arcIn);
+		net.add(arcOut);
+	}
 
 	private void removeTransition(IncludeHierarchy includes, String transition) {
 		// perhaps we shouldn't have to explicitly delete the Arcs; may be bug in PIPECore
@@ -198,7 +270,6 @@ public class GraspExampleTest {
 	}
 
 	private void expandTransition(IncludeHierarchy includes, String transition, String child) throws Exception {
-		
 		PetriNet expanded = buildBasicNet(child+"net"); 
 		includes.include(expanded, child);
 		buildPrePostTransitions(includes, transition);
@@ -213,9 +284,6 @@ public class GraspExampleTest {
 		if (!prepareTransitionExpanded) {
 			T10 = new DiscreteTransition("T10");  
 			T11 = new DiscreteTransition("T11"); 
-//			T10 = new DiscreteTransition("T10", "Pre-"+transition);  
-//			T11 = new DiscreteTransition("T11", "Post-"+transition); 
-
 			includes.getPetriNet().add(T10);
 			includes.getPetriNet().add(T11);
 			name(includes.getPetriNet(), Transition.class, "T10", "Pre-"+transition); 
@@ -231,7 +299,6 @@ public class GraspExampleTest {
 		afterPlace = includes.getPetriNet().outboundArcs(targetTransition).iterator().next().getTarget();
 	}
 
-
 	@SuppressWarnings("rawtypes")
 	private void buildMergeArc(boolean inbound,
 			IncludeHierarchy parent, String child, String homePlace, String transition, String awayPlace) 
@@ -245,8 +312,6 @@ public class GraspExampleTest {
 						parent.getInterfacePlace(awayPlace), tokenweights)	;
 		parent.getPetriNet().add(arc); 
 	}
-
-
 	private void buildTokenWeights() {
 		tokenweights = new HashMap<String, String>(); 
 		tokenweights.put("Default", "1");
@@ -259,6 +324,7 @@ public class GraspExampleTest {
 		buildLineList(); 
 	}
 
+	@SuppressWarnings("unused")
 	private void printResults() {
 		for (String line : linelist) {
 			System.out.println(line);
@@ -289,10 +355,6 @@ public class GraspExampleTest {
     					and(ANormalArc.withSource("T1").andTarget("P2").with("1", "Default").token()).
     					and(ANormalArc.withSource("P2").andTarget("T2").with("1", "Default").token()).
     					andFinally(ANormalArc.withSource("T2").andTarget("P3").with("1", "Default").token());
-//    					and(ANormalArc.withSource("P3").andTarget("T3").with("1", "Default").token()).
-//    					andFinally(ANormalArc.withSource("T3").andTarget("P4").with("1", "Default").token());
-//			and(APlace.withId("P1").externallyAccessible()).and(APlace.withId("P2")).
-    	
     	name(net, Place.class, "P0", "Enabled"); 
     	name(net, Place.class, "P1", "Ready"); 
     	name(net, Place.class, "P2", "Ongoing"); 
@@ -300,10 +362,6 @@ public class GraspExampleTest {
     	name(net, Transition.class, "T0", "Prepare"); 
     	name(net, Transition.class, "T1", "Start"); 
     	name(net, Transition.class, "T2", "Finish"); 
-//    	for (Place place : net.getExecutablePetriNet().getPlaces()) {
-//			System.out.println(place.getId());
-//			System.out.println(place.getName());
-//		}
     	return net; 
     }
     
@@ -325,9 +383,6 @@ public class GraspExampleTest {
     			and(ANormalArc.withSource("T3").andTarget("P5").with("1", "Default").token()).
     			and(ANormalArc.withSource("P5").andTarget("T2").with("1", "Default").token()).
     			andFinally(ANormalArc.withSource("P6").andTarget("T2").with("1", "Default").token());
-//    					and(ANormalArc.withSource("P3").andTarget("T3").with("1", "Default").token()).
-//    					andFinally(ANormalArc.withSource("T3").andTarget("P4").with("1", "Default").token());
-//			and(APlace.withId("P1").externallyAccessible()).and(APlace.withId("P2")).
     	name(net, Place.class, "P0", "Enabled"); 
     	name(net, Place.class, "P1", "Ready"); 
     	name(net, Place.class, "P2", "Ongoing"); 
@@ -358,9 +413,12 @@ public class GraspExampleTest {
 	}
 
 	public void closeExternalTransitionFired() {
-//		System.out.println("closeExternalTransitionFired");
 		try {
-			runner.markPlace(CLOSE_SENSED, "Default", 1);
+			if (closeSensed) {
+				runner.markPlace(CLOSE_SENSED, "Default", 1);
+			} else {
+				runner.markPlace("Grasp.Close_hand.Missed", "Default", 1);
+			}
 		} catch (InterfaceException e) {
 			e.printStackTrace();
 		}
@@ -370,10 +428,17 @@ public class GraspExampleTest {
         if (file.exists()) file.delete();
 	}
 
-
+	@Override
+	public void propertyChange(PropertyChangeEvent evt) {
+		if (evt.getPropertyName().equals(Place.TOKEN_CHANGE_MESSAGE)) {
+			tokenEvent = true; 
+			Place place = (Place) evt.getSource(); 
+			assertEquals("Grasp.Suspended", place.getId()); 
+			Map<String, Integer> token = (Map<String, Integer>) evt.getNewValue(); 
+			assertEquals(1, token.size());
+			Entry<String, Integer> entry = token.entrySet().iterator().next(); 
+			assertEquals("Default", entry.getKey());
+			assertEquals(1, entry.getValue().intValue());
+		}
+	}
 }
-//and(APlace.withId("P1").externallyAccessible()).and(APlace.withId("P2")).
-//and(AnExternalTransition.withId("T0").andExternalClass("uk.ac.imperial.pipe.models.petrinet.TestingExternalTransition")).
-//and(ANormalArc.withSource("P0").andTarget("T0").with("1", "Default").token()).
-//and(ANormalArc.withSource("P1").andTarget("T0").with("1", "Default").token()).
-//andFinally(ANormalArc.withSource("T0").andTarget("P2").with("1", "Default").token());
