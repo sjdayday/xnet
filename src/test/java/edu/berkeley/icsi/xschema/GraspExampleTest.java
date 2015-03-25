@@ -30,6 +30,7 @@ import uk.ac.imperial.pipe.exceptions.IncludeException;
 import uk.ac.imperial.pipe.exceptions.PetriNetComponentException;
 import uk.ac.imperial.pipe.exceptions.PetriNetComponentNotFoundException;
 import uk.ac.imperial.pipe.models.petrinet.Arc;
+import uk.ac.imperial.pipe.models.petrinet.DiscreteTransition;
 import uk.ac.imperial.pipe.models.petrinet.InboundArc;
 import uk.ac.imperial.pipe.models.petrinet.InboundNormalArc;
 import uk.ac.imperial.pipe.models.petrinet.IncludeHierarchy;
@@ -75,16 +76,23 @@ public class GraspExampleTest {
 	private List<String> linelist;
 	private IncludeHierarchy includes;
 	private Map<String,String> tokenweights;
+	private boolean prepareTransitionExpanded;
+	private Transition targetTransition;
+	private Place beforePlace;
+	private Place afterPlace;
+	private Transition T10;
+	private Transition T11;
 
     @Before
     public void setUp() {
         cleanupFile(filename); 
         buildTokenWeights(); 
+        prepareTransitionExpanded = false; 
     }
 
 	@Test
 	public void basicXschemaBuilt() throws Exception {
-		PetriNet basicControl = buildBasicNet(); 
+		PetriNet basicControl = buildBasicNet("net1"); 
 		runner = new PetriNetRunner(basicControl); 
 		runner.markPlace("Enabled", "Default", 1);
 		run();
@@ -112,7 +120,7 @@ public class GraspExampleTest {
 	}
 	@Test
 	public void graspXschemaIncludesCloseHand() throws Exception {
-		PetriNet basicControl = buildBasicNet(); 
+		PetriNet basicControl = buildBasicNet("net1"); 
 		PetriNet closeHand = buildCloseHand(); 
 		includes = new IncludeHierarchy(basicControl, "Grasp"); 
 		includes.include(closeHand, "Close_hand");
@@ -146,6 +154,83 @@ public class GraspExampleTest {
 		checkLine("", 8, "7,\"Grasp.Finish\",0,0,0,0,0,0,0,1,0,0,0");
 		
 	}
+	@Test
+	public void expandSingleTransitionDefaultsToIncludingBasicControlXschema() throws Exception {
+		PetriNet basicControl = buildBasicNet("net1"); 
+		includes = new IncludeHierarchy(basicControl, "Grasp");
+		findComponentsAffectedByExpansion(includes, "Prepare");
+		expandTransition(includes, "Prepare", "Pre-shape");
+		expandTransition(includes, "Prepare", "Approach");
+		removeTransition(includes, "Prepare"); 
+		runner = new PetriNetRunner(includes.getPetriNet()); 
+		runner.markPlace("Grasp.Enabled", "Default", 1);
+		run(); 
+//		printResults();
+		checkLine("", 0, "\"Round\",\"Transition\",\"Grasp.Approach.Done\",\"Grasp.Approach.Enabled\","
+				+ "\"Grasp.Approach.Ongoing\",\"Grasp.Approach.Ready\",\"Grasp.Done\",\"Grasp.Enabled\","
+				+ "\"Grasp.Ongoing\",\"Grasp.Pre-shape.Done\",\"Grasp.Pre-shape.Enabled\","
+				+ "\"Grasp.Pre-shape.Ongoing\",\"Grasp.Pre-shape.Ready\",\"Grasp.Ready\"");
+		checkLine("", 2, "1,\"Grasp.Pre-Prepare\",0,1,0,0,0,0,0,0,1,0,0,0");
+		checkLine("", 3, "2,\"Grasp.Approach.Prepare\",0,0,0,1,0,0,0,0,1,0,0,0");
+		checkLine("random alternation between child nets",
+				4, "3,\"Grasp.Pre-shape.Prepare\",0,0,0,1,0,0,0,0,0,0,1,0");
+		checkLine("", 5, "4,\"Grasp.Approach.Start\",0,0,1,0,0,0,0,0,0,0,1,0");
+		checkLine("Approach finishes...", 6, "5,\"Grasp.Approach.Finish\",1,0,0,0,0,0,0,0,0,0,1,0");
+		checkLine("...Pre-shape continues", 7, "6,\"Grasp.Pre-shape.Start\",1,0,0,0,0,0,0,0,0,1,0,0");
+		checkLine("", 8, "7,\"Grasp.Pre-shape.Finish\",1,0,0,0,0,0,0,1,0,0,0,0");
+		checkLine("once both children finish, grasp continues",
+				9, "8,\"Grasp.Post-Prepare\",0,0,0,0,0,0,0,0,0,0,0,1");
+		checkLine("", 10, "9,\"Grasp.Start\",0,0,0,0,0,0,1,0,0,0,0,0");
+		checkLine("", 11, "10,\"Grasp.Finish\",0,0,0,0,1,0,0,0,0,0,0,0");
+	}
+
+	private void removeTransition(IncludeHierarchy includes, String transition) {
+		// perhaps we shouldn't have to explicitly delete the Arcs; may be bug in PIPECore
+		InboundArc beforeArc = includes.getPetriNet().inboundArcs(targetTransition).iterator().next();
+		OutboundArc afterArc = includes.getPetriNet().outboundArcs(targetTransition).iterator().next();
+		includes.getPetriNet().removeArc(beforeArc);
+		includes.getPetriNet().removeArc(afterArc);
+
+		includes.getPetriNet().removeTransition(targetTransition);
+//		for (Arc arc : includes.getPetriNet().getArcs()) {
+//			System.out.println(arc.getId());
+//		}
+	}
+
+	private void expandTransition(IncludeHierarchy includes, String transition, String child) throws Exception {
+		
+		PetriNet expanded = buildBasicNet(child+"net"); 
+		includes.include(expanded, child);
+		buildPrePostTransitions(includes, transition);
+		includes.getPetriNet().add(new InboundNormalArc(beforePlace, T10, tokenweights));    
+		buildMergeArc(false, includes, child, "Enabled", "Pre-"+transition, child+".Enabled"); 
+		includes.getPetriNet().add(new OutboundNormalArc(T11, afterPlace, tokenweights));    
+		buildMergeArc(true, includes, child, "Done", "Post-"+transition, child+".Done"); 
+	}
+
+	private void buildPrePostTransitions(IncludeHierarchy includes,
+			String transition) throws PetriNetComponentException {
+		if (!prepareTransitionExpanded) {
+			T10 = new DiscreteTransition("T10");  
+			T11 = new DiscreteTransition("T11"); 
+//			T10 = new DiscreteTransition("T10", "Pre-"+transition);  
+//			T11 = new DiscreteTransition("T11", "Post-"+transition); 
+
+			includes.getPetriNet().add(T10);
+			includes.getPetriNet().add(T11);
+			name(includes.getPetriNet(), Transition.class, "T10", "Pre-"+transition); 
+			name(includes.getPetriNet(), Transition.class, "T11", "Post-"+transition); 
+			prepareTransitionExpanded = true; 
+		}
+	}
+
+	private void findComponentsAffectedByExpansion(IncludeHierarchy includes,
+			String transition) throws PetriNetComponentNotFoundException {
+		targetTransition = includes.getPetriNet().getComponent(transition, Transition.class); 
+		beforePlace = includes.getPetriNet().inboundArcs(targetTransition).iterator().next().getSource();
+		afterPlace = includes.getPetriNet().outboundArcs(targetTransition).iterator().next().getTarget();
+	}
+
 
 	@SuppressWarnings("rawtypes")
 	private void buildMergeArc(boolean inbound,
@@ -194,8 +279,8 @@ public class GraspExampleTest {
 		fileReader.close();
 	}
 
-    private PetriNet buildBasicNet() {
-    	PetriNet net = APetriNet.named("basic-xschema").and(AToken.called("Default").withColor(Color.BLACK)).
+    private PetriNet buildBasicNet(String name) {
+    	PetriNet net = APetriNet.named(name).and(AToken.called("Default").withColor(Color.BLACK)).
     					and(APlace.withId("P0").externallyAccessible()).and(APlace.withId("P1")).and(APlace.withId("P2")).and(APlace.withId("P3")).
     			    	and(AnImmediateTransition.withId("T0")).and(AnImmediateTransition.withId("T1")).and(AnImmediateTransition.withId("T2")).		
     					and(ANormalArc.withSource("P0").andTarget("T0").with("1", "Default").token()).
@@ -207,7 +292,7 @@ public class GraspExampleTest {
 //    					and(ANormalArc.withSource("P3").andTarget("T3").with("1", "Default").token()).
 //    					andFinally(ANormalArc.withSource("T3").andTarget("P4").with("1", "Default").token());
 //			and(APlace.withId("P1").externallyAccessible()).and(APlace.withId("P2")).
-    	// name components manually, until support added to DSL in PIPECore
+    	
     	name(net, Place.class, "P0", "Enabled"); 
     	name(net, Place.class, "P1", "Ready"); 
     	name(net, Place.class, "P2", "Ongoing"); 
@@ -221,6 +306,7 @@ public class GraspExampleTest {
 //		}
     	return net; 
     }
+    
     private PetriNet buildCloseHand() {
     	// P0 / Enabled is externally accessible for testing, not because required for Grasp xschema
     	PetriNet net = APetriNet.named("Close_hand").and(AToken.called("Default").withColor(Color.BLACK)).
@@ -261,6 +347,8 @@ public class GraspExampleTest {
 
 	@SuppressWarnings("unchecked")
 	private void name(PetriNet net, @SuppressWarnings("rawtypes") Class clazz, String component, String name) {
+		// name components manually, until support added to DSL in PIPECore
+		// works after a fashion, but arcs are inconsistently named
 		try {
 			net.getComponent(component, clazz).setId(name);
 		} catch (PetriNetComponentNotFoundException e) {
