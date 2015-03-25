@@ -1,19 +1,16 @@
 package edu.berkeley.icsi.xschema;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import java.awt.Color;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.BufferedReader;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -50,7 +47,6 @@ import uk.ac.imperial.pipe.runner.InterfaceException;
 import uk.ac.imperial.pipe.runner.JsonParameters;
 import uk.ac.imperial.pipe.runner.PetriNetRunner;
 import uk.ac.imperial.pipe.runner.Runner;
-import uk.ac.imperial.pipe.runner.StateReport;
 /**
  * The Grasp example shows how to build an x-schema that executes other x-schemas.
  * {@link https://github.com/sjdayday/xschema/wiki}  
@@ -510,6 +506,7 @@ public class GraspExampleTest implements PropertyChangeListener {
         if (file.exists()) file.delete();
 	}
 
+	@SuppressWarnings("unchecked")
 	@Override
 	public void propertyChange(PropertyChangeEvent evt) {
 		if (evt.getPropertyName().equals(Place.TOKEN_CHANGE_MESSAGE)) {
