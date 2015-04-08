@@ -13,8 +13,8 @@
 
     <repositories>
         <repository>
-            <id>PIPECore-mvn-repo</id>
-            <url>https://raw.github.com/sjdayday/PIPECore/mvn-repo/</url>
+            <id>xschema-mvn-repo</id>
+            <url>https://raw.github.com/sjdayday/xschema/mvn-repo/</url>
             <snapshots>
                 <enabled>true</enabled>
                 <updatePolicy>always</updatePolicy>
@@ -96,8 +96,8 @@
                     <outputDirectory>${project.build.directory}/mvn-repo</outputDirectory>
                     <branch>refs/heads/mvn-repo</branch>
                     <includes><include>**/*</include></includes>
-                    <repositoryName>PIPECore</repositoryName>
-                    <repositoryOwner>sjdayday</repositoryOwner>   <!-- for 1.0.2-SNAPSHOT, was: sarahtattersall -->
+                    <repositoryName>xschema</repositoryName>
+                    <repositoryOwner>sjdayday</repositoryOwner>  
                     <merge>true</merge>
                 </configuration>
                 <executions>
